@@ -7,6 +7,115 @@ TRAIN_BATCH_SIZE = 64
 TEST_BATCH_SIZE = 1000
 LOG_INTERVAL = 10
 NUMBER_OF_EPOCHS = 10
+BASE_LEARNING_RATE = 0.1
+
+
+class ResidualBlock(torch.nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ResidualBlock, self).__init__()
+        width = out_channels // 4
+        self.conv1 = torch.nn.Conv2d(in_channels, width, kernel_size=(1, 1), stride=1, bias=False)
+        self.bn1 = torch.nn.BatchNorm2d(width)
+        self.conv2 = torch.nn.Conv2d(width, width, kernel_size=(3, 3), stride=1, padding=1, groups=1, bias=False, dilation=1)
+        self.bn2 = torch.nn.BatchNorm2d(width)
+        self.conv3 = torch.nn.Conv2d(width, out_channels, kernel_size=(1, 1), stride=1, bias=False)
+        self.bn3 = torch.nn.BatchNorm2d(out_channels)
+        self.relu = torch.nn.ReLU(inplace=True)
+        self.downsample = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, out_channels, kernel_size=(1, 1)),
+            torch.nn.BatchNorm2d(out_channels)
+        )
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.in_channels != self.out_channels:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
+        return out
+
+
+class ResNet50(torch.nn.Module):
+    def __init__(self):
+        super(ResNet50, self).__init__()
+        self.conv1 = torch.nn.Conv2d(3, 64, kernel_size=(7, 7), stride=2, padding=3, bias=False)
+        self.bn1 = torch.nn.BatchNorm2d(64)
+        self.relu = torch.nn.ReLU(inplace=True)
+        self.maxpool = torch.nn.MaxPool2d(kernel_size=(3, 3), stride=2, padding=1)
+        self.layer1 = torch.nn.Sequential(
+            ResidualBlock(64, 256),
+            ResidualBlock(256, 256),
+            ResidualBlock(256, 256),
+            ResidualBlock(256, 256),
+        )
+
+        self.conv2 = torch.nn.Conv2d(256, 512, kernel_size=(1, 1), stride=2)
+        self.layer2 = torch.nn.Sequential(
+            ResidualBlock(512, 512),
+            ResidualBlock(512, 512),
+            ResidualBlock(512, 512),
+            ResidualBlock(512, 512),
+        )
+
+        self.conv3 = torch.nn.Conv2d(512, 1024, kernel_size=(1, 1), stride=2)
+        self.layer3 = torch.nn.Sequential(
+            ResidualBlock(1024, 1024),
+            ResidualBlock(1024, 1024),
+            ResidualBlock(1024, 1024),
+            ResidualBlock(1024, 1024),
+            ResidualBlock(1024, 1024),
+            ResidualBlock(1024, 1024),
+        )
+
+        self.conv4 = torch.nn.Conv2d(1024, 2048, kernel_size=(1, 1), stride=2)
+        self.layer4 = torch.nn.Sequential(
+            ResidualBlock(2048, 2048),
+            ResidualBlock(2048, 2048),
+            ResidualBlock(2048, 2048),
+        )
+
+        self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = torch.nn.Linear(2048, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+
+        x = self.conv2(x)
+        x = self.layer2(x)
+
+        x = self.conv3(x)
+        x = self.layer3(x)
+
+        x = self.conv4(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+
+        return x
+        
 
 def main():
     torch.manual_seed(1)
@@ -40,8 +149,14 @@ def main():
 
         torch.nn.LogSoftmax(1)
     )
+    model = ResNet50()
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=2e-4, betas=(0.5, 0.999))
+    #optimizer = torch.optim.Adam(model.parameters(), lr=2e-4, betas=(0.5, 0.999))
+
+    #learning_rate = BASE_LEARNING_RATE * TRAIN_BATCH_SIZE / 256
+    learning_rate = 0.1
+    print("Learning Rate: {}".format(learning_rate))
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
     # Load dataset.
     train_loader = torch.utils.data.DataLoader(
@@ -70,9 +185,14 @@ def main():
             optimizer.zero_grad()
             data = data.to(device)
             target = target.to(device)
+
+            # TODO
+            data = data.expand(64, 3, 28, 28)
             output = model(data)
 
             loss = F.nll_loss(output, target)
+            #criterion = torch.nn.MSELoss()
+            #loss = criterion(output, target)
             loss.backward()
             optimizer.step()
 
