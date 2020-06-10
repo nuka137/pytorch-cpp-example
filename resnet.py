@@ -1,6 +1,7 @@
 import torch
 import torchvision
 import torch.nn.functional as F
+from torchsummary import summary
 
 DATA_ROOT = "./mnist-data"
 TRAIN_BATCH_SIZE = 64
@@ -14,40 +15,45 @@ class ResidualBlock(torch.nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ResidualBlock, self).__init__()
         width = out_channels // 4
+
         self.conv1 = torch.nn.Conv2d(in_channels, width, kernel_size=(1, 1), stride=1, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(width)
+        self.relu1 = torch.nn.ReLU(inplace=True)
+
+
         self.conv2 = torch.nn.Conv2d(width, width, kernel_size=(3, 3), stride=1, padding=1, groups=1, bias=False, dilation=1)
         self.bn2 = torch.nn.BatchNorm2d(width)
-        self.conv3 = torch.nn.Conv2d(width, out_channels, kernel_size=(1, 1), stride=1, bias=False)
-        self.bn3 = torch.nn.BatchNorm2d(out_channels)
-        self.relu = torch.nn.ReLU(inplace=True)
-        self.downsample = torch.nn.Sequential(
-            torch.nn.Conv2d(in_channels, out_channels, kernel_size=(1, 1)),
-            torch.nn.BatchNorm2d(out_channels)
-        )
+        self.relu2 = torch.nn.ReLU(inplace=True)
 
-        self.in_channels = in_channels
-        self.out_channels = out_channels
+        self.conv3 = torch.nn.Conv2d(width, out_channels, kernel_size=(1, 1), stride=1, padding=0, bias=False)
+        self.bn3 = torch.nn.BatchNorm2d(out_channels)
+
+        def shortcut(in_, out):
+            if in_ != out:
+                return torch.nn.Conv2d(in_, out, kernel_size=(1, 1), padding=0, bias=False)
+            else:
+                return lambda x: x
+        self.shortcut = shortcut(in_channels, out_channels)
+
+        self.relu3 = torch.nn.ReLU(inplace=True)
 
     def forward(self, x):
         identity = x
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        out = self.relu1(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
-        out = self.relu(out)
+        out = self.relu1(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
 
-        if self.in_channels != self.out_channels:
-            identity = self.downsample(x)
+        shortcut = self.shortcut(x)
 
-        out += identity
-        out = self.relu(out)
+        out = self.relu(out + shortcut)
 
         return out
 
@@ -59,6 +65,7 @@ class ResNet50(torch.nn.Module):
         self.bn1 = torch.nn.BatchNorm2d(64)
         self.relu = torch.nn.ReLU(inplace=True)
         self.maxpool = torch.nn.MaxPool2d(kernel_size=(3, 3), stride=2, padding=1)
+
         self.layer1 = torch.nn.Sequential(
             ResidualBlock(64, 256),
             ResidualBlock(256, 256),
@@ -128,31 +135,10 @@ def main():
     device = torch.device(device_type)
 
     # Build model.
-    model = torch.nn.Sequential(
-        torch.nn.Conv2d(1, 10, (5, 5)),
-        torch.nn.MaxPool2d(2),
-        torch.nn.ReLU(),
-
-        torch.nn.Conv2d(10, 20, (5, 5)),
-        torch.nn.Dropout2d(),
-        torch.nn.MaxPool2d(2),
-        torch.nn.ReLU(),
-
-        torch.nn.Flatten(),
-
-        torch.nn.Linear(320, 50),
-        torch.nn.ReLU(),
-
-        torch.nn.Dropout(0.5),
-
-        torch.nn.Linear(50, 10),
-
-        torch.nn.LogSoftmax(1)
-    )
+    model = ResNet50()
     model.to(device)
-
+    summary(model, (3, 32, 32))
     optimizer = torch.optim.Adadelta(model.parameters(), lr=0.1)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.7)
 
     # Load dataset.
     train_loader = torch.utils.data.DataLoader(
@@ -212,8 +198,6 @@ def main():
 
         test_loss /= len(test_loader.dataset)
         print("Average loss: {}, Accuracy: {}".format(test_loss, correct / len(test_loader.dataset)))
-
-        scheduler.step()
 
 
 if __name__ == "__main__":
