@@ -69,7 +69,7 @@ def main():
 
     # Train loop.
     for epoch in range(NUMBER_OF_EPOCHS):
-        print("Epoch {}: lr={}".format(epoch, schedular.get_last_lr()[0]))
+        print("Epoch {}: lr={}".format(epoch, scheduler.get_last_lr()[0]))
 
         # Train.
         print("Start train.")
