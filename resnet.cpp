@@ -63,7 +63,7 @@ auto main() -> int
       torch::data::make_data_loader(std::move(test_dataset), kTestBatchSize);
 
   torch::optim::Adam optimizer(
-      model->parameters(), torch::optim::AdamOptions(2e-4).beta1(0.5));
+      model->parameters(), torch::optim::AdamOptions(2e-4).betas(std::make_tuple(0.9, 0.999)));
 
   for (size_t epoch = 1; epoch <= kNumberOfEpochs; ++epoch) {
     // train

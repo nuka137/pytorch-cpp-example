@@ -149,14 +149,10 @@ def main():
 
         torch.nn.LogSoftmax(1)
     )
-    model = ResNet50()
     model.to(device)
-    #optimizer = torch.optim.Adam(model.parameters(), lr=2e-4, betas=(0.5, 0.999))
 
-    #learning_rate = BASE_LEARNING_RATE * TRAIN_BATCH_SIZE / 256
-    learning_rate = 0.1
-    print("Learning Rate: {}".format(learning_rate))
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    optimizer = torch.optim.Adadelta(model.parameters(), lr=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.7)
 
     # Load dataset.
     train_loader = torch.utils.data.DataLoader(
@@ -178,28 +174,29 @@ def main():
         batch_size=TEST_BATCH_SIZE,
     )
 
+
     for epoch in range(NUMBER_OF_EPOCHS):
-        # train
+        print("Epoch {}: lr={}".format(epoch, schedular.get_last_lr()[0]))
+
+        # Train.
+        print("Start train.")
         model.train()
         for batch_idx, (data, target) in enumerate(train_loader):
             optimizer.zero_grad()
             data = data.to(device)
             target = target.to(device)
 
-            # TODO
-            data = data.expand(64, 3, 28, 28)
             output = model(data)
 
             loss = F.nll_loss(output, target)
-            #criterion = torch.nn.MSELoss()
-            #loss = criterion(output, target)
             loss.backward()
             optimizer.step()
 
             if batch_idx % LOG_INTERVAL == 0:
-                print("Train Epoch: {}, Loss: {}".format(batch_idx, loss.item()))
+                print("Batch: {}, Loss: {}".format(batch_idx, loss.item()))
 
-        # test
+        # Evaluate.
+        print("Start eval.")
         model.eval()
         test_loss = 0
         correct = 0
@@ -214,7 +211,9 @@ def main():
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
         test_loss /= len(test_loader.dataset)
-        print("Test set: Average loss: {} | Accuracy: {}".format(test_loss, correct / len(test_loader.dataset)))
+        print("Average loss: {}, Accuracy: {}".format(test_loss, correct / len(test_loader.dataset)))
+
+        scheduler.step()
 
 
 if __name__ == "__main__":
