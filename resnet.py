@@ -6,7 +6,7 @@ from torchsummary import summary
 DATA_ROOT = "./mnist-data"
 TRAIN_BATCH_SIZE = 64
 TEST_BATCH_SIZE = 1000
-LOG_INTERVAL = 10
+LOG_INTERVAL = 100
 NUMBER_OF_EPOCHS = 10
 BASE_LEARNING_RATE = 0.1
 
@@ -98,7 +98,8 @@ class ResNet50(torch.nn.Module):
         )
 
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = torch.nn.Linear(2048, 1000)
+        #self.fc = torch.nn.Linear(2048, 1000)
+        self.fc = torch.nn.Linear(2048, 10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -169,7 +170,9 @@ def main():
 
             output = model(data)
 
-            loss = F.nll_loss(output, target)
+            prob = F.softmax(output, dim=1)
+            #loss = F.nll_loss(output, target)
+            loss = F.nll_loss(torch.log(prob), target)
             loss.backward()
             optimizer.step()
 
@@ -185,9 +188,11 @@ def main():
             for data, target in test_loader:
                 data = data.to(device)
                 target = target.to(device)
+
                 output = model(data)
 
-                test_loss += F.nll_loss(output, target, reduction="sum").item()
+                prob = F.softmax(output, dim=1)
+                test_loss += F.nll_loss(torch.log(output), target, reduction="sum").item()
                 pred = output.argmax(1, keepdim=True)
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
