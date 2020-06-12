@@ -193,8 +193,6 @@ struct ResNet50 : torch::nn::Module {
     out = relu->forward(out);
     out = maxpool->forward(out);
 
-    std::cout << "HOGE" << std::endl;
-
     out = layer1->forward(out);
     out = layer2->forward(out);
     out = layer3->forward(out);
@@ -203,6 +201,8 @@ struct ResNet50 : torch::nn::Module {
     out = avgpool->forward(out);
     out = flatten->forward(out);
     out = fc->forward(out);
+
+    return out;
   }
 
   torch::nn::Conv2d conv1 = nullptr;
@@ -235,7 +235,6 @@ auto main() -> int
 
   ResNet50 model;
   model.to(device);
-    std::cout << "H" << std::endl;
 
   // Load dataset.
   auto train_dataset = torch::data::datasets::MNIST(kDataRoot)
@@ -263,7 +262,6 @@ auto main() -> int
     for (auto& batch : *train_loader) {
       auto data = batch.data.to(device);
       auto target = batch.target.to(device);
-      std::cout << device << std::endl;
       auto output = model.forward(data);
 
       auto prob = torch::log_softmax(output, 1);
