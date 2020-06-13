@@ -7,57 +7,48 @@ const int64_t kTestBatchSize = 1000;
 const int64_t kLogInterval = 10;
 const int64_t kNumberOfEpochs = 10;
 
-struct ResidualBlock : torch::nn::Module {
-  ResidualBlock(int in_channels, int out_channels, int stride=1)// :
-    //width(out_channels / 4),
-    //conv1(torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, width, {1, 1}).stride(1).bias(false))),
-    //bn1(torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(width))),
-    //relu1(torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true))),
-    //conv2(torch::nn::Conv2d(torch::nn::Conv2dOptions(width, width, {3, 3})
-    //                        .stride(stride).padding(1).groups(1).bias(false).dilation(1))),
-    //bn2(torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(width))),
-    //relu2(torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true))),
-    //conv3(torch::nn::Conv2d(torch::nn::Conv2dOptions(width, out_channels, {1, 1})
-    //                        .stride(1).padding(0).bias(false))),
-    //bn3(torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(out_channels))),
-    //shortcut(
-    //  torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, out_channels, {1, 1})
-    //                    .stride(stride).padding(0).bias(false))
-    //),
-    //relu3(torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)))
-  {
+using namespace torch::nn;
+
+struct ResidualBlock : Module {
+  ResidualBlock(int in_channels, int out_channels, int stride=1) {
     int width = out_channels / 4;
 
-    conv1 = torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, width, {1, 1})
-                              .stride(1).bias(false));
-    register_module("conv1", conv1);
-    bn1 = torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(width));
-    register_module("bn1", bn1);
-    relu1 = torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true));
-    register_module("relu1", relu1);
+    conv1 = Conv2d(Conv2dOptions(in_channels, width, {1, 1})
+                   .stride(1).bias(false));
+    bn1 = BatchNorm2d(BatchNormOptions(width));
+    relu1 = ReLU(ReLUOptions().inplace(true));
 
-    conv2 = torch::nn::Conv2d(torch::nn::Conv2dOptions(width, width, {3, 3})
-                              .stride(stride).padding(1).groups(1).bias(false).dilation(1));
-    register_module("conv2", conv2);
-    bn2 = torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(width));
-    register_module("bn2", bn2);
-    relu2 = torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true));
-    register_module("relu2", relu2);
+    conv2 = Conv2d(Conv2dOptions(width, width, {3, 3})
+                   .stride(stride).padding(1).groups(1)
+                   .bias(false).dilation(1));
+    bn2 = BatchNorm2d(BatchNormOptions(width));
+    relu2 = ReLU(ReLUOptions().inplace(true));
 
-    conv3 = torch::nn::Conv2d(torch::nn::Conv2dOptions(width, out_channels, {1, 1})
-                              .stride(1).padding(0).bias(false));
-    register_module("conv3", conv3);
-    bn3 = torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(out_channels));
-    register_module("bn3", bn3);
+    conv3 = Conv2d(Conv2dOptions(width, out_channels, {1, 1})
+                   .stride(1).padding(0).bias(false));
+    bn3 = BatchNorm2d(BatchNormOptions(out_channels));
 
-    shortcut = torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, out_channels, {1, 1})
-                                 .stride(stride).padding(0).bias(false));
-    register_module("shortcut", shortcut);
-    relu3 = torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true));
-    register_module("relu3", relu3);
+    Sequential shortcut(
+        Conv2d(Conv2dOptions(in_channels, out_channels, {1, 1})
+               .stride(stride).padding(0).bias(false)),
+        BatchNorm2d(BatchNormOptions(out_channels))
+    );
+    this->shortcut = shortcut;
+    relu3 = ReLU(ReLUOptions().inplace(true));
 
     this->in_channels = in_channels;
     this->out_channels = out_channels;
+
+    register_module("conv1", conv1);
+    register_module("bn1", bn1);
+    register_module("relu1", relu1);
+    register_module("conv2", conv2);
+    register_module("bn2", bn2);
+    register_module("relu2", relu2);
+    register_module("conv3", conv3);
+    register_module("bn3", bn3);
+    register_module("shortcut", shortcut);
+    register_module("relu3", relu3);
   }
 
   torch::Tensor forward(torch::Tensor input) {
@@ -85,80 +76,47 @@ struct ResidualBlock : torch::nn::Module {
     return out;
   }
 
-  torch::nn::Conv2d conv1 = nullptr;
-  torch::nn::BatchNorm2d bn1 = nullptr;
-  torch::nn::ReLU relu1 = nullptr;
-  torch::nn::Conv2d conv2 = nullptr;
-  torch::nn::BatchNorm2d bn2 = nullptr;
-  torch::nn::ReLU relu2 = nullptr;
-  torch::nn::Conv2d conv3 = nullptr;
-  torch::nn::BatchNorm2d bn3 = nullptr;
+  Conv2d conv1 = nullptr;
+  BatchNorm2d bn1 = nullptr;
+  ReLU relu1 = nullptr;
+  Conv2d conv2 = nullptr;
+  BatchNorm2d bn2 = nullptr;
+  ReLU relu2 = nullptr;
+  Conv2d conv3 = nullptr;
+  BatchNorm2d bn3 = nullptr;
 
-  torch::nn::Conv2d shortcut = nullptr;
-  torch::nn::ReLU relu3 = nullptr;
+  Sequential shortcut = nullptr;
+  ReLU relu3 = nullptr;
 
   int in_channels;
   int out_channels;
-  //int width;
 };
 
-/*
-torch::nn::Sequential make_residual_block(int in_channels, int out_channels, int stride=1) {
-    int width = out_channels / 4;
 
-    torch::nn::Sequential block;
-
-    block->push_back(torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, width, {1, 1})
-                                       .stride(1).bias(false)));
-    block->push_back(torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(width)));
-    block->push_back(torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)));
-
-    block->push_back(torch::nn::Conv2d(torch::nn::Conv2dOptions(width, width, {3, 3})
-                                       .stride(stride).padding(1).groups(1).bias(false).dilation(1)));
-    block->push_back(torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(width)));
-    block->push_back(torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)));
-
-    block->push_back(torch::nn::Conv2d(torch::nn::Conv2dOptions(width, out_channels, {1, 1})
-                                       .stride(1).padding(0).bias(false)));
-    block->push_back(torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(out_channels)));
-
-    shortcut = torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels, out_channels, {1, 1})
-                                 .stride(stride).padding(0).bias(false));
-    relu3 = torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true));
-}
-*/
-
-struct ResNet50 : torch::nn::Module {
+struct ResNet50 : Module {
   ResNet50() {
-    conv1 = torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 64, {7, 7})
+    conv1 = Conv2d(Conv2dOptions(1, 64, {7, 7})
                               .stride(2).padding(3).bias(false));
-    register_module("conv1", conv1);
-    bn1 = torch::nn::BatchNorm2d(torch::nn::BatchNormOptions(64));
-    register_module("bn1", bn1);
-    relu = torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true));
-    register_module("relu", relu);
-    maxpool = torch::nn::MaxPool2d(torch::nn::MaxPoolOptions<2>({3, 3})
-                                   .stride(2).padding(1));
-    register_module("maxpool", maxpool);
+    bn1 = BatchNorm2d(BatchNormOptions(64));
+    relu = ReLU(ReLUOptions().inplace(true));
+    maxpool = MaxPool2d(MaxPoolOptions<2>({3, 3}).stride(2).padding(1));
 
-    torch::nn::Sequential layer1(
+    Sequential layer1(
       ResidualBlock(64, 256),
       ResidualBlock(256, 256),
       ResidualBlock(256, 256)
     );
     this->layer1 = layer1;
-    register_module("layer1", this->layer1);
 
-    torch::nn::Sequential layer2(
+    Sequential layer2(
       ResidualBlock(256, 512, 2),
       ResidualBlock(512, 512),
       ResidualBlock(512, 512),
       ResidualBlock(512, 512)
     );
     this->layer2 = layer2;
-    register_module("layer2", this->layer2);
 
-    torch::nn::Sequential layer3(
+    Sequential layer3(
       ResidualBlock(512, 1024, 2),
       ResidualBlock(1024, 1024),
       ResidualBlock(1024, 1024),
@@ -167,21 +125,28 @@ struct ResNet50 : torch::nn::Module {
       ResidualBlock(1024, 1024)
     );
     this->layer3 = layer3;
-    register_module("layer3", this->layer3);
 
-    torch::nn::Sequential layer4(
+    Sequential layer4(
       ResidualBlock(1024, 2048, 2),
       ResidualBlock(2048, 2048),
       ResidualBlock(2048, 2048)
     );
     this->layer4 = layer4;
-    register_module("layer4", this->layer4);
 
-    avgpool = torch::nn::AdaptiveAvgPool2d(torch::nn::AdaptiveAvgPool2dOptions({1, 1}));
+    avgpool = AdaptiveAvgPool2d(AdaptiveAvgPool2dOptions({1, 1}));
+    flatten = Flatten(FlattenOptions().start_dim(1));
+    fc = Linear(2048, 10);
+
+    register_module("conv1", conv1);
+    register_module("bn1", bn1);
+    register_module("relu", relu);
+    register_module("maxpool", maxpool);
+    register_module("layer1", this->layer1);
+    register_module("layer2", this->layer2);
+    register_module("layer3", this->layer3);
+    register_module("layer4", this->layer4);
     register_module("avgpool", avgpool);
-    flatten = torch::nn::Flatten(torch::nn::FlattenOptions());
     register_module("flatten", flatten);
-    fc = torch::nn::Linear(2048, 10);
     register_module("fc", fc);
   }
 
@@ -205,24 +170,24 @@ struct ResNet50 : torch::nn::Module {
     return out;
   }
 
-  torch::nn::Conv2d conv1 = nullptr;
-  torch::nn::BatchNorm2d bn1 = nullptr;
-  torch::nn::ReLU relu = nullptr;
-  torch::nn::MaxPool2d maxpool = nullptr;
-  torch::nn::Sequential layer1 = nullptr;
-  torch::nn::Sequential layer2 = nullptr;
-  torch::nn::Sequential layer3 = nullptr;
-  torch::nn::Sequential layer4 = nullptr;
-  torch::nn::AdaptiveAvgPool2d avgpool = nullptr;
-  torch::nn::Flatten flatten = nullptr;
-  torch::nn::Linear fc = nullptr;
+  Conv2d conv1 = nullptr;
+  BatchNorm2d bn1 = nullptr;
+  ReLU relu = nullptr;
+  MaxPool2d maxpool = nullptr;
+  Sequential layer1 = nullptr;
+  Sequential layer2 = nullptr;
+  Sequential layer3 = nullptr;
+  Sequential layer4 = nullptr;
+  AdaptiveAvgPool2d avgpool = nullptr;
+  Flatten flatten = nullptr;
+  Linear fc = nullptr;
 };
 
 auto main() -> int
 {
   torch::manual_seed(1);
 
-  // Determine device on which performs training.
+  // Create device.
   torch::DeviceType device_type;
   if (torch::cuda::is_available()) {
     std::cout << "Train on GPU." << std::endl;
@@ -233,8 +198,11 @@ auto main() -> int
   }
   torch::Device device(device_type);
 
+  // Build model.
   ResNet50 model;
   model.to(device);
+  torch::optim::Adam optimizer(
+      model.parameters(), torch::optim::AdamOptions(0.1));
 
   // Load dataset.
   auto train_dataset = torch::data::datasets::MNIST(kDataRoot)
@@ -253,33 +221,33 @@ auto main() -> int
   auto test_loader =
       torch::data::make_data_loader(std::move(test_dataset), kTestBatchSize);
 
-  torch::optim::Adam optimizer(
-      model.parameters(), torch::optim::AdamOptions(0.1));
-
   for (size_t epoch = 1; epoch <= kNumberOfEpochs; ++epoch) {
-    // train
+    // Train.
+    std::cout << "Start train." << std::endl;
     size_t batch_idx = 0;
+    model.train();
     for (auto& batch : *train_loader) {
+      optimizer.zero_grad();
       auto data = batch.data.to(device);
       auto target = batch.target.to(device);
+
       auto output = model.forward(data);
 
       auto prob = torch::log_softmax(output, 1);
-
       auto loss = torch::nll_loss(prob, target);
       AT_ASSERT(!std::isnan(loss.template item<float>()));
-      optimizer.zero_grad();
       loss.backward();
       optimizer.step();
 
       batch_idx++;
-
       if ((batch_idx % kLogInterval) == 0) {
-        std::cout << "Train Epoch: " << batch_idx << ", Loss: " << loss.template item<float>() << std::endl;
+        std::cout << "Train Epoch: " << batch_idx << ", Loss: "
+                  << loss.template item<float>() << std::endl;
       }
     }
 
-    // test
+    // Evaluate.
+    std::cout << "Start eval." << std::endl;
     torch::NoGradGuard no_grad;
     model.eval();
     double test_loss = 0;
@@ -289,14 +257,18 @@ auto main() -> int
       auto target = batch.target.to(device);
       auto output = model.forward(data);
 
-      test_loss += torch::nll_loss(output, target, {}, at::Reduction::Sum).template item<int64_t>();
-      auto pred = output.argmax(1);
+      auto prob = torch::log_softmax(output, 1);
+
+      test_loss += torch::nll_loss(prob, target, {}, at::Reduction::Sum).template item<double>();
+      //auto loss = torch::nll_loss(prob, target, {}, at::Reduction::Sum);
+      auto pred = output.argmax(1, true);
       correct += pred.eq(target).sum().template item<int64_t>();
     }
 
     test_loss /= test_dataset_size;
     std::cout << "Test set: Average loss: " << test_loss
-              << " | Accuracy: " << static_cast<double>(correct) / test_dataset_size;
+              << " | Accuracy: "
+              << static_cast<double>(correct) / test_dataset_size;
   }
 
   return 0;

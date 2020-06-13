@@ -16,21 +16,26 @@ class ResidualBlock(torch.nn.Module):
         super(ResidualBlock, self).__init__()
         width = out_channels // 4
 
-        self.conv1 = torch.nn.Conv2d(in_channels, width, kernel_size=(1, 1), stride=1, bias=False)
+        self.conv1 = torch.nn.Conv2d(in_channels, width, kernel_size=(1, 1),
+                                     stride=1, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(width)
         self.relu1 = torch.nn.ReLU(inplace=True)
 
-        self.conv2 = torch.nn.Conv2d(width, width, kernel_size=(3, 3), stride=stride, padding=1, groups=1, bias=False, dilation=1)
+        self.conv2 = torch.nn.Conv2d(width, width, kernel_size=(3, 3),
+                                     stride=stride, padding=1, groups=1,
+                                     bias=False, dilation=1)
         self.bn2 = torch.nn.BatchNorm2d(width)
         self.relu2 = torch.nn.ReLU(inplace=True)
 
-        self.conv3 = torch.nn.Conv2d(width, out_channels, kernel_size=(1, 1), stride=1, padding=0, bias=False)
+        self.conv3 = torch.nn.Conv2d(width, out_channels, kernel_size=(1, 1),
+                                     stride=1, padding=0, bias=False)
         self.bn3 = torch.nn.BatchNorm2d(out_channels)
 
         def shortcut(in_, out):
             if in_ != out:
                 return torch.nn.Sequential(
-                    torch.nn.Conv2d(in_, out, kernel_size=(1, 1), stride=stride, padding=0, bias=False),
+                    torch.nn.Conv2d(in_, out, kernel_size=(1, 1),
+                                    stride=stride, padding=0, bias=False),
                     torch.nn.BatchNorm2d(out),
                 )
             else:
@@ -63,11 +68,13 @@ class ResidualBlock(torch.nn.Module):
 class ResNet50(torch.nn.Module):
     def __init__(self):
         super(ResNet50, self).__init__()
-        self.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=2, padding=3, bias=False)
+        self.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7),
+                                     stride=2, padding=3, bias=False)
         #self.conv1 = torch.nn.Conv2d(3, 64, kernel_size=(7, 7), stride=2, padding=3, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(64)
         self.relu = torch.nn.ReLU(inplace=True)
-        self.maxpool = torch.nn.MaxPool2d(kernel_size=(3, 3), stride=2, padding=1)
+        self.maxpool = torch.nn.MaxPool2d(kernel_size=(3, 3), stride=2,
+                                          padding=1)
 
         self.layer1 = torch.nn.Sequential(
             ResidualBlock(64, 256),
@@ -98,6 +105,7 @@ class ResNet50(torch.nn.Module):
         )
 
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
+        self.flatten = torch.nn.Flatten(1)
         #self.fc = torch.nn.Linear(2048, 1000)
         self.fc = torch.nn.Linear(2048, 10)
 
@@ -113,7 +121,7 @@ class ResNet50(torch.nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+        x = self.flatten(x)
         x = self.fc(x)
 
         return x
@@ -125,8 +133,10 @@ def main():
     # Create device.
     if torch.cuda.is_available():
         device_type = "cuda"
+        print("Train on GPU.")
     else:
         device_type = "cpu"
+        print("Train on CPU.")
     device = torch.device(device_type)
 
     # Build model.
