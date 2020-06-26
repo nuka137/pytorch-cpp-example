@@ -1,8 +1,11 @@
 #include <iostream>
 #include <torch/torch.h>
-#include <torch/hooks.h>
+//#include <torch/utils/hooks.h>
+//#include <torch/csrc/api/include/torch/utils.h>
+#include <torch/utils.h>
 
 using namespace torch::nn;
+using namespace torch::utils::hooks;
 
 const char* kDataRoot = "./data";
 const int64_t kTrainBatchSize = 64;
@@ -51,12 +54,12 @@ struct SimpleNet : Module {
   Linear fc2 = nullptr;
 };
 
-std::map<int64_t, torch::utils::hooks::RemovableHandle*> handles;
+HooksDict handles;
 
 auto main() -> int {
   torch::manual_seed(1);
 
-  torch::utils::hooks::RemovableHandle handle(&handles);
+  RemovableHandle handle(&handles);
 
   // Create device.
   torch::DeviceType device_type;
