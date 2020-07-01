@@ -1,13 +1,14 @@
 #include <iostream>
 #include <torch/torch.h>
 
-const char* kDataRoot = "./data";
+const char* kDataRoot = "./mnist";
 const int64_t kTrainBatchSize = 64;
 const int64_t kTestBatchSize = 1000;
-const int64_t kLogInterval = 10;
+const int64_t kLogInterval = 100;
 const int64_t kNumberOfEpochs = 10;
 
 using namespace torch::nn;
+
 
 struct ResidualBlock : Module {
   ResidualBlock(int in_channels, int out_channels, int stride=1) {
@@ -208,7 +209,6 @@ auto main() -> int
   auto train_dataset = torch::data::datasets::MNIST(kDataRoot)
                            .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
                            .map(torch::data::transforms::Stack<>());
-  const size_t train_dataset_size = train_dataset.size().value();
   auto train_loader =
       torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
           std::move(train_dataset), kTrainBatchSize);
@@ -217,11 +217,13 @@ auto main() -> int
                           kDataRoot, torch::data::datasets::MNIST::Mode::kTest)
                           .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
                           .map(torch::data::transforms::Stack<>());
-  const size_t test_dataset_size = test_dataset.size().value();
   auto test_loader =
       torch::data::make_data_loader(std::move(test_dataset), kTestBatchSize);
 
-  for (size_t epoch = 1; epoch <= kNumberOfEpochs; ++epoch) {
+  // Train loop.
+  for (size_t epoch = 0; epoch < kNumberOfEpochs; ++epoch) {
+    std::cout << "Epoch " << epoch << ":" << std::endl;
+
     // Train.
     std::cout << "Start train." << std::endl;
     size_t batch_idx = 0;
@@ -241,7 +243,7 @@ auto main() -> int
 
       batch_idx++;
       if ((batch_idx % kLogInterval) == 0) {
-        std::cout << "Train Epoch: " << batch_idx << ", Loss: "
+        std::cout << "Batch: " << batch_idx << ", Loss: "
                   << loss.template item<float>() << std::endl;
       }
     }
@@ -250,25 +252,24 @@ auto main() -> int
     std::cout << "Start eval." << std::endl;
     torch::NoGradGuard no_grad;
     model.eval();
-    double test_loss = 0;
-    int32_t correct = 0;
+    double test_loss = 0.0;
+    size_t correct = 0;
+    size_t total = 0;
     for (auto& batch : *test_loader) {
       auto data = batch.data.to(device);
       auto target = batch.target.to(device);
       auto output = model.forward(data);
 
       auto prob = torch::log_softmax(output, 1);
-
       test_loss += torch::nll_loss(prob, target, {}, at::Reduction::Sum).template item<double>();
-      //auto loss = torch::nll_loss(prob, target, {}, at::Reduction::Sum);
       auto pred = output.argmax(1, true);
       correct += pred.eq(target).sum().template item<int64_t>();
+      total += kTestBatchSize;
     }
 
-    test_loss /= test_dataset_size;
-    std::cout << "Test set: Average loss: " << test_loss
-              << " | Accuracy: "
-              << static_cast<double>(correct) / test_dataset_size;
+    test_loss /= total;
+    std::cout << "Average loss: " << test_loss << ", Accuracy: "
+              << static_cast<double>(correct) / total << std::endl;
   }
 
   return 0;

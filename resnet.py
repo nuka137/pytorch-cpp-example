@@ -3,12 +3,11 @@ import torchvision
 import torch.nn.functional as F
 from torchsummary import summary
 
-DATA_ROOT = "./mnist-data"
+DATA_ROOT = "./mnist"
 TRAIN_BATCH_SIZE = 64
 TEST_BATCH_SIZE = 1000
 LOG_INTERVAL = 100
 NUMBER_OF_EPOCHS = 10
-BASE_LEARNING_RATE = 0.1
 
 
 class ResidualBlock(torch.nn.Module):
@@ -70,7 +69,6 @@ class ResNet50(torch.nn.Module):
         super(ResNet50, self).__init__()
         self.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7),
                                      stride=2, padding=3, bias=False)
-        #self.conv1 = torch.nn.Conv2d(3, 64, kernel_size=(7, 7), stride=2, padding=3, bias=False)
         self.bn1 = torch.nn.BatchNorm2d(64)
         self.relu = torch.nn.ReLU(inplace=True)
         self.maxpool = torch.nn.MaxPool2d(kernel_size=(3, 3), stride=2,
@@ -106,7 +104,6 @@ class ResNet50(torch.nn.Module):
 
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = torch.nn.Flatten(1)
-        #self.fc = torch.nn.Linear(2048, 1000)
         self.fc = torch.nn.Linear(2048, 10)
 
     def forward(self, x):
@@ -142,7 +139,6 @@ def main():
     # Build model.
     model = ResNet50()
     model.to(device)
-    #summary(model, (3, 224, 224))
     summary(model, (1, 28, 28))
     optimizer = torch.optim.Adadelta(model.parameters(), lr=0.1)
 
@@ -166,9 +162,9 @@ def main():
         batch_size=TEST_BATCH_SIZE,
     )
 
-
+    # Train loop.
     for epoch in range(NUMBER_OF_EPOCHS):
-        #print("Epoch {}: lr={}".format(epoch, schedular.get_last_lr()[0]))
+        print("Epoch {}:".format(epoch))
 
         # Train.
         print("Start train.")
@@ -180,9 +176,8 @@ def main():
 
             output = model(data)
 
-            prob = F.softmax(output, dim=1)
-            #loss = F.nll_loss(output, target)
-            loss = F.nll_loss(torch.log(prob), target)
+            prob = F.log_softmax(output, dim=1)
+            loss = F.nll_loss(prob, target)
             loss.backward()
             optimizer.step()
 
@@ -193,7 +188,8 @@ def main():
         print("Start eval.")
         model.eval()
         test_loss = 0
-        correct = 0
+        correct = 0.0
+        total = 0
         with torch.no_grad():
             for data, target in test_loader:
                 data = data.to(device)
@@ -201,13 +197,15 @@ def main():
 
                 output = model(data)
 
-                prob = F.softmax(output, dim=1)
-                test_loss += F.nll_loss(torch.log(output), target, reduction="sum").item()
+                prob = F.log_softmax(output, dim=1)
+                test_loss += F.nll_loss(prob, target, reduction="sum").item()
                 pred = output.argmax(1, keepdim=True)
                 correct += pred.eq(target.view_as(pred)).sum().item()
+                total += TEST_BATCH_SIZE
 
-        test_loss /= len(test_loader.dataset)
-        print("Average loss: {}, Accuracy: {}".format(test_loss, correct / len(test_loader.dataset)))
+        test_loss /= total
+        print("Average loss: {}, Accuracy: {}"
+              .format(test_loss, correct / total))
 
 
 if __name__ == "__main__":
