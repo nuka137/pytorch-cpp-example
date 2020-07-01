@@ -8,6 +8,7 @@ const int64_t kLogInterval = 100;
 const int64_t kNumberOfEpochs = 10;
 
 using namespace torch::nn;
+namespace F = torch::nn::functional;
 
 
 struct ResidualBlock : Module {
@@ -203,7 +204,7 @@ auto main() -> int
   ResNet50 model;
   model.to(device);
   torch::optim::Adam optimizer(
-      model.parameters(), torch::optim::AdamOptions(0.1));
+      model.parameters(), torch::optim::AdamOptions(0.01));
 
   // Load dataset.
   auto train_dataset = torch::data::datasets::MNIST(kDataRoot)
@@ -235,17 +236,17 @@ auto main() -> int
 
       auto output = model.forward(data);
 
-      auto prob = torch::log_softmax(output, 1);
-      auto loss = torch::nll_loss(prob, target);
+      auto prob = F::log_softmax(output, 1);
+      auto loss = F::nll_loss(prob, target);
       AT_ASSERT(!std::isnan(loss.template item<float>()));
       loss.backward();
       optimizer.step();
 
-      batch_idx++;
       if ((batch_idx % kLogInterval) == 0) {
         std::cout << "Batch: " << batch_idx << ", Loss: "
                   << loss.template item<float>() << std::endl;
       }
+      batch_idx++;
     }
 
     // Evaluate.
@@ -260,16 +261,15 @@ auto main() -> int
       auto target = batch.target.to(device);
       auto output = model.forward(data);
 
-      auto prob = torch::log_softmax(output, 1);
-      test_loss += torch::nll_loss(prob, target, {}, at::Reduction::Sum).template item<double>();
+      auto prob = F::log_softmax(output, 1);
+      test_loss += F::nll_loss(prob, target, F::NLLLossFuncOptions().reduction(torch::kSum)).template item<double>();
       auto pred = output.argmax(1, true);
-      correct += pred.eq(target).sum().template item<int64_t>();
+      correct += pred.eq(target.view_as(pred)).sum().template item<int64_t>();
       total += kTestBatchSize;
     }
 
-    test_loss /= total;
-    std::cout << "Average loss: " << test_loss << ", Accuracy: "
-              << static_cast<double>(correct) / total << std::endl;
+    std::cout << "Average loss: " << test_loss / total
+	      << ", Accuracy: " << static_cast<double>(correct) / total << std::endl;
   }
 
   return 0;

@@ -140,7 +140,7 @@ def main():
     model = ResNet50()
     model.to(device)
     summary(model, (1, 28, 28))
-    optimizer = torch.optim.Adadelta(model.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     # Load dataset.
     train_loader = torch.utils.data.DataLoader(
@@ -203,9 +203,8 @@ def main():
                 correct += pred.eq(target.view_as(pred)).sum().item()
                 total += TEST_BATCH_SIZE
 
-        test_loss /= total
         print("Average loss: {}, Accuracy: {}"
-              .format(test_loss, correct / total))
+              .format(test_loss / loss, correct / total))
 
 
 if __name__ == "__main__":
