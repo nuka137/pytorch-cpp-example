@@ -78,8 +78,8 @@ class YoloLoss(torch.nn.Module):
         for i in range(0, bbox_target.size(0), B):
             pred = bbox_pred[i:i+B]                                         # [num_boxes, [x, y, w, h, confidence]]
             pred_xyxy = Variable(torch.FloatTensor(pred.size()))            # [num_boxes, [x, y, w, h, confidence]]
-            pred_xyxy[:, :2] = pred[:, 2]/float(S) - 0.5 * pred[:, 2:4]
-            pred_xyxy[:, 2:4] = pred[:, 2]/float(S) + 0.5 * pred[:, 2:4]
+            pred_xyxy[:, :2] = pred[:, :2]/float(S) - 0.5 * pred[:, 2:4]
+            pred_xyxy[:, 2:4] = pred[:, :2]/float(S) + 0.5 * pred[:, 2:4]
 
             target = bbox_target[i].view(-1, 5)                             # [1, [x, y, w, h, confidence]]
             target_xyxy = Variable(torch.FloatTensor(target.size()))        # [1, [x, y, w, h, confidence]]
@@ -93,17 +93,18 @@ class YoloLoss(torch.nn.Module):
 
         bbox_pred_response = bbox_pred[coord_response_mask].view(-1, 5)         # [n_response, [x, y, w, h, confidence]]
         bbox_target_response = bbox_target[coord_response_mask].view(-1, 5)     # [n_response, [x, y, w, h, confidence]]
+        # TODO: bbox_target_iou
+        target_iou = bbox_target_iou[coord_response_mask].view(-1, 5)           # [n_response, [x, y, w, h, confidence]]
         loss_xy = F.mse_loss(bbox_pred_response[:, :2], bbox_target_response[:, :2], reduction="sum")
         loss_wh = F.mse_loss(torch.sqrt(bbox_pred_response[:, 2:4]), torch.sqrt(bbox_target_response[:, 2:4]), reduction="sum")
-        #loss_conf = F.mse_loss(bbox_pred_response[:, 4], bbox_target_response[:, 4], reduction="sum")
+        loss_conf = F.mse_loss(bbox_pred_response[:, 4], target_iou[:, 4], reduction="sum")
 
         loss_class = F.mse_loss(class_pred, class_target, reduction="sum")
 
         loss = self.lambda_coord * (loss_xy + loss_wh) + loss_conf + self.lambda_noobj * loss_noobj_conf + loss_class
         loss /= predict.size(0)
 
-
-
+        return loss
 
 
 class YoloV1(torch.nn.Module):
@@ -221,6 +222,7 @@ def main():
     summary(model, (3, 448, 448))
     optimizer = torch.optim.SGD(model.parameters(), lr=get_learning_rate(0, 0, 0),
                                 momentum=0.9, weight_decay=0.0005)
+    yolo_loss = YoloLoss()
 
     # Load dataset.
     iteration_max = len(train_loader)
@@ -242,9 +244,11 @@ def main():
             data = data.to(device)
             target = target.to(device)
 
-            output = model(data)
+            pred = model(data)
 
-            loss = ...
+            loss = yolo_loss(pred, target)
+            
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -252,16 +256,16 @@ def main():
                 print("Batch: {}, Loss: {}".format(batch_idx, loss.item()))
         
         # Evaluate.
-        # print("Start eval.")
-        # model.eval()
-        # with torch.no_grad():
-        #     for data, target in test_loader:
-        #         data = data.to(device)
-        #         target = target.to(device)
+        print("Start eval.")
+        model.eval()
+        with torch.no_grad():
+            for data, target in test_loader:
+                data = data.to(device)
+                target = target.to(device)
 
-        #         output = model(data)
+                pred = model(data)
 
-        #         loss = ...
+                loss = yolo_loss(pred, target)
                 
 
 
