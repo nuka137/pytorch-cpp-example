@@ -21,6 +21,11 @@ tar xf VOCtrainval_06-Nov-2007.tar
 tar xf VOCtest_06-Nov-2007.tar
 ```
 
+```bash
+wget https://pjreddie.com/media/files/voc_label.py
+python voc_label.py
+```
+
 
 ## References
 
