@@ -29,6 +29,7 @@ class VOCDataset(torch.utils.data.Dataset):
 
         # Load image.
         image = cv2.imread(image_path)
+        image_width, image_height, _ = image.shape
         image = cv2.resize(image, (448, 448), interpolation=cv2.INTER_LINEAR)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
@@ -36,8 +37,7 @@ class VOCDataset(torch.utils.data.Dataset):
         image = (image - np.array(mean_rgb, dtype=np.float32)) / 255.0
         image = torchvision.transforms.ToTensor()(image)
 
-        # Load label.
-
+        # Load bounding box and label.
         boxes = []
         labels = []
         with open(label_path, "r") as f:
@@ -45,15 +45,45 @@ class VOCDataset(torch.utils.data.Dataset):
         for label in label_list:
             label = label.strip()
             sp = label.split()
-            c = int(sp[0])
             x1 = float(sp[1])
             y1 = float(sp[2])
             x2 = float(sp[3])
             y2 = float(sp[4])
+            c = int(sp[0])
             boxes.append([x1, y1, x2, y2])
             labels.append(c)
+        boxes = torch.Tensor(boxes)
+        labels = torch.LongTensor(labels)
 
-        return image, boxes
+        boxes /= torch.Tensor([[image_width, image_height, image_width, image_height]]).expand_as(boxes)
+
+        S = 7
+        B = 2
+        C = 20
+        N = 5 * B + C       # [x, y, w, h, confidence] * num_boxes + num_classes
+
+        boxes_wh = boxes[:, 2:] - boxes[:, :2]
+        boxes_xy = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+        target = torch.zeros([S, S, 5 * B + C])
+        cell_size = 1.0 / float(S)
+        for b in range(boxes.size(0)):
+            xy = boxes_xy[b]
+            wh = boxes_wh[b]
+            label = labels[b]
+            
+            ij = (xy / cell_size).ceil() - 1.0
+            i, j = int(ij[0]), int(ij[1])
+            x0y0 = ij * cell_size
+            xy_normalized = (xy - x0y0) / cell_size
+
+            for k in range(B):
+                s = 5 * k
+                target[j, i, s:s+2] = xy_normalized
+                target[j, i, s+2:s+4] = wh
+                target[j, i, s+4] = 1.0
+            target[j, i, 5*B + label] = 1.0
+
+        return image, target
 
 
 def test():
@@ -62,7 +92,7 @@ def test():
 
     count = 0
     for batch_idx, (data, target) in enumerate(loader):
-        print(target)
+        print(target.shape)
 
         count += 1
         if count == 10:

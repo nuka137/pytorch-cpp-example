@@ -2,8 +2,12 @@ import torch
 import torch.nn.functional as F
 from torchsummary import summary
 
+from voc_loader import VOCDataset
+
 NUMBER_OF_EPOCHS = 10
 LOG_INTERVAL = 100
+#BATCH_SIZE = 64
+BATCH_SIZE = 1
 
 
 def compute_iou(bbox1, bbox2):
@@ -39,6 +43,8 @@ def compute_iou(bbox1, bbox2):
 
 class YoloLoss(torch.nn.Module):
     def __init__(self, num_features=7, num_boxes=2, num_classes=20, lambda_coord=5.0, lambda_noobj=0.5):
+        super(YoloLoss, self).__init__()
+
         self.S = num_features
         self.B = num_boxes
         self.c = num_classes
@@ -51,8 +57,11 @@ class YoloLoss(torch.nn.Module):
 
         coord_mask = target[:, :, :, 4] > 0
         noobj_mask = target[:, :, :, 4] == 0
-        coord_mask = coord_mask.unsqueeze(-1).expand_as(coord_mask)
-        noobj_mask = noobj_mask.unsqueeze(-1).expand_as(noobj_mask)
+        coord_mask = coord_mask.unsqueeze(-1).expand_as(target)
+        noobj_mask = noobj_mask.unsqueeze(-1).expand_as(target)
+
+        print(predict.shape)
+        print(target.shape)
 
         coord_pred = predict[coord_mask].view(-1, N)        # [num_coords, [x, y, w, h, confidence] * num_boxes + num_classes]
         bbox_pred = coord_pred[:, :5*B].view(-1, 5)         # [num_coords * num_boxes, [x, y, w, h, confidence]]
@@ -172,15 +181,21 @@ class YoloV1(torch.nn.Module):
             torch.nn.LeakyReLU(0.1, inplace=True)
         )
 
+        S = 7
+        B = 2
+        C = 20
+
         self.fc_layers = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(7*7*1024, 4096),
             torch.nn.LeakyReLU(0.1, inplace=True),
             torch.nn.Dropout(0.5, inplace=False),
-            torch.nn.Linear(4096, 1024)  # TODO
+            torch.nn.Linear(4096, S * S * (5 * B + C)),
+            torch.nn.Sigmoid()
         )
 
     def forward(self, x):
+        # TODO: add pretrained model.
         out = self.conv_layers(x)
         out = self.fc_layers(out)
 
@@ -220,13 +235,18 @@ def main():
     model = YoloV1()
     model.to(device)
     summary(model, (3, 448, 448))
-    optimizer = torch.optim.SGD(model.parameters(), lr=get_learning_rate(0, 0, 0),
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.001,
                                 momentum=0.9, weight_decay=0.0005)
     yolo_loss = YoloLoss()
 
     # Load dataset.
+    train_dataset = VOCDataset("data/train.txt")
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     iteration_max = len(train_loader)
+    print(f"======== {iteration_max}")
 
+    val_dataset = VOCDataset("data/test.txt")
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
     
     # Train loop.
     for epoch in range(NUMBER_OF_EPOCHS):
@@ -267,7 +287,6 @@ def main():
 
                 loss = yolo_loss(pred, target)
                 
-
 
 if __name__ == "__main__":
     main()
